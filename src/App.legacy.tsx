@@ -14,9 +14,9 @@ import {
   Droplet,
   ArrowRight
 } from 'lucide-react';
-import { TOOLS_DATA, SERVICE_PROS, INITIAL_REQUESTS } from './constants';
+import { TOOLS_DATA, SERVICE_PROS, INITIAL_REQUESTS } from './constants/originalConstants';
 import { UserRole, View, Product, ServiceRequest } from './types';
-import { AIAssistant } from './components/AIAssistant';
+import { AIAssistant } from './components/features/AIAssistant/AIAssistantCore';
 
 // --- Sub-components for cleaner App.tsx ---
 
