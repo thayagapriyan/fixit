@@ -1,0 +1,8 @@
+{
+  "name": "FixItHub",
+  "description": "A dual-sided marketplace connecting homeowners with tools and service professionals, powered by AI diagnostics.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
