@@ -94,11 +94,12 @@ export class FrontendStack extends cdk.Stack {
         },
       ],
       healthCheck: {
-        command: ['CMD-SHELL', 'wget --quiet --tries=1 --spider http://localhost/health || exit 1'],
+        // Use root path - nginx:alpine serves default page at /
+        command: ['CMD-SHELL', 'wget --quiet --tries=1 --spider http://localhost/ || exit 1'],
         interval: cdk.Duration.seconds(30),
-        timeout: cdk.Duration.seconds(5),
-        retries: 3,
-        startPeriod: cdk.Duration.seconds(60),
+        timeout: cdk.Duration.seconds(10),
+        retries: 5,
+        startPeriod: cdk.Duration.seconds(120),
       },
     });
 
@@ -113,33 +114,37 @@ export class FrontendStack extends cdk.Stack {
         taskDefinition,
         serviceName: 'fitit-frontend-service',
         publicLoadBalancer: true,
-        desiredCount: 2, // High availability
+        desiredCount: 1, // Single instance for cost savings (Free tier)
         // Security groups are auto-created by the pattern
-        assignPublicIp: false, // Private subnets with NAT
+        assignPublicIp: true, // Public subnet - no NAT needed!
         taskSubnets: {
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          subnetType: ec2.SubnetType.PUBLIC,
         },
-        healthCheckGracePeriod: cdk.Duration.seconds(60),
+        healthCheckGracePeriod: cdk.Duration.seconds(120),
         circuitBreaker: {
           rollback: true, // Auto-rollback on deployment failure
         },
       }
     );
 
-    // Configure health check
+    // Configure ALB health check - use root path for nginx
     this.fargateService.targetGroup.configureHealthCheck({
-      path: '/health',
-      healthyHttpCodes: '200',
+      path: '/',  // nginx:alpine serves default page here
+      healthyHttpCodes: '200,304',
       interval: cdk.Duration.seconds(30),
-      timeout: cdk.Duration.seconds(5),
+      timeout: cdk.Duration.seconds(10),
       healthyThresholdCount: 2,
-      unhealthyThresholdCount: 3,
+      unhealthyThresholdCount: 5,
     });
+
+    // Fix minHealthyPercent warning
+    const cfnService = this.fargateService.service.node.defaultChild as ecs.CfnService;
+    cfnService.addPropertyOverride('DeploymentConfiguration.MinimumHealthyPercent', 100);
 
     // Auto-scaling
     const scaling = this.fargateService.service.autoScaleTaskCount({
-      minCapacity: 2,
-      maxCapacity: 10,
+      minCapacity: 1, // Minimum for cost savings
+      maxCapacity: 4, // Reduced max for free tier
     });
 
     scaling.scaleOnCpuUtilization('CpuScaling', {

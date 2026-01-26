@@ -16,23 +16,19 @@ export class NetworkStack extends cdk.Stack {
     super(scope, id, props);
 
     // ============================================
-    // VPC
+    // VPC (Cost-optimized - No NAT Gateway!)
     // ============================================
     this.vpc = new ec2.Vpc(this, 'FititVpc', {
       vpcName: 'fitit-vpc',
       maxAzs: 2, // Cost-effective: 2 availability zones
-      natGateways: 1, // Cost-effective: single NAT gateway
+      natGateways: 0, // No NAT Gateway - saves ~$32/month!
       subnetConfiguration: [
         {
           name: 'Public',
           subnetType: ec2.SubnetType.PUBLIC,
           cidrMask: 24,
         },
-        {
-          name: 'Private',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-          cidrMask: 24,
-        },
+        // Private subnets removed - not needed for public Fargate
       ],
     });
 

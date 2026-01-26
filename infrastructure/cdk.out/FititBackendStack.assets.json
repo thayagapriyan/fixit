@@ -1,31 +1,31 @@
 {
   "version": "48.0.0",
   "files": {
-    "1d073f14fe9b2bf0c2d533012c8f43a868ce0ddc7c923b04d0fa5add2d0f0e2b": {
+    "6001c93e1746acfee1c6ae310645301e4beed208332f41aa5cbc22eb0d9e3fd5": {
       "displayName": "BackendLambda/Code",
       "source": {
-        "path": "asset.1d073f14fe9b2bf0c2d533012c8f43a868ce0ddc7c923b04d0fa5add2d0f0e2b",
+        "path": "C:\\Priyan\\VSC\\OWN\\fitit",
         "packaging": "zip"
       },
       "destinations": {
-        "224193574799-us-east-2-14841bff": {
+        "224193574799-us-east-2-ba9179b7": {
           "bucketName": "cdk-hnb659fds-assets-224193574799-us-east-2",
-          "objectKey": "1d073f14fe9b2bf0c2d533012c8f43a868ce0ddc7c923b04d0fa5add2d0f0e2b.zip",
+          "objectKey": "6001c93e1746acfee1c6ae310645301e4beed208332f41aa5cbc22eb0d9e3fd5.zip",
           "region": "us-east-2",
           "assumeRoleArn": "arn:${AWS::Partition}:iam::224193574799:role/cdk-hnb659fds-file-publishing-role-224193574799-us-east-2"
         }
       }
     },
-    "ae551d7984f02547b3b44436e9e31f83f77cfd03474bfe4df3d91087b48b8743": {
+    "1dd91738d0ab4c12b41a180ba60595d70e80ee0d2da17e22c16954522d442f74": {
       "displayName": "FititBackendStack Template",
       "source": {
         "path": "FititBackendStack.template.json",
         "packaging": "file"
       },
       "destinations": {
-        "224193574799-us-east-2-8d43cd04": {
+        "224193574799-us-east-2-3641cc10": {
           "bucketName": "cdk-hnb659fds-assets-224193574799-us-east-2",
-          "objectKey": "ae551d7984f02547b3b44436e9e31f83f77cfd03474bfe4df3d91087b48b8743.json",
+          "objectKey": "1dd91738d0ab4c12b41a180ba60595d70e80ee0d2da17e22c16954522d442f74.json",
           "region": "us-east-2",
           "assumeRoleArn": "arn:${AWS::Partition}:iam::224193574799:role/cdk-hnb659fds-file-publishing-role-224193574799-us-east-2"
         }

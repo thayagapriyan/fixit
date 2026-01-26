@@ -112,12 +112,12 @@
       "HealthCheck": {
        "Command": [
         "CMD-SHELL",
-        "wget --quiet --tries=1 --spider http://localhost/health || exit 1"
+        "wget --quiet --tries=1 --spider http://localhost/ || exit 1"
        ],
        "Interval": 30,
-       "Retries": 3,
-       "StartPeriod": 60,
-       "Timeout": 5
+       "Retries": 5,
+       "StartPeriod": 120,
+       "Timeout": 10
       },
       "Image": "nginx:alpine",
       "LogConfiguration": {
@@ -399,11 +399,11 @@
    "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
    "Properties": {
     "HealthCheckIntervalSeconds": 30,
-    "HealthCheckPath": "/health",
-    "HealthCheckTimeoutSeconds": 5,
+    "HealthCheckPath": "/",
+    "HealthCheckTimeoutSeconds": 10,
     "HealthyThresholdCount": 2,
     "Matcher": {
-     "HttpCode": "200"
+     "HttpCode": "200,304"
     },
     "Port": 80,
     "Protocol": "HTTP",
@@ -428,7 +428,7 @@
      }
     ],
     "TargetType": "ip",
-    "UnhealthyThresholdCount": 3,
+    "UnhealthyThresholdCount": 5,
     "VpcId": {
      "Fn::ImportValue": "FititNetworkStack:ExportsOutputRefFititVpcFE0F8966EC124A29"
     }
@@ -454,14 +454,14 @@
       "Rollback": true
      },
      "MaximumPercent": 200,
-     "MinimumHealthyPercent": 50
+     "MinimumHealthyPercent": 100
     },
     "DeploymentController": {
      "Type": "ECS"
     },
-    "DesiredCount": 2,
+    "DesiredCount": 1,
     "EnableECSManagedTags": false,
-    "HealthCheckGracePeriodSeconds": 60,
+    "HealthCheckGracePeriodSeconds": 120,
     "LaunchType": "FARGATE",
     "LoadBalancers": [
      {
@@ -474,7 +474,7 @@
     ],
     "NetworkConfiguration": {
      "AwsvpcConfiguration": {
-      "AssignPublicIp": "DISABLED",
+      "AssignPublicIp": "ENABLED",
       "SecurityGroups": [
        {
         "Fn::GetAtt": [
@@ -485,10 +485,10 @@
       ],
       "Subnets": [
        {
-        "Fn::ImportValue": "FititNetworkStack:ExportsOutputRefFititVpcPrivateSubnet1Subnet94795FC7002819D6"
+        "Fn::ImportValue": "FititNetworkStack:ExportsOutputRefFititVpcPublicSubnet1Subnet9DBBA252EA1342EF"
        },
        {
-        "Fn::ImportValue": "FititNetworkStack:ExportsOutputRefFititVpcPrivateSubnet2SubnetB133FD13EAE36540"
+        "Fn::ImportValue": "FititNetworkStack:ExportsOutputRefFititVpcPublicSubnet2Subnet378C92C9D4FD8999"
        }
       ]
      }
@@ -587,8 +587,8 @@
   "FrontendServiceTaskCountTargetF2B76C23": {
    "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
    "Properties": {
-    "MaxCapacity": 10,
-    "MinCapacity": 2,
+    "MaxCapacity": 4,
+    "MinCapacity": 1,
     "ResourceId": {
      "Fn::Join": [
       "",

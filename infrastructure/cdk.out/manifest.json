@@ -23,7 +23,7 @@
         "validateOnSynth": false,
         "assumeRoleArn": "arn:${AWS::Partition}:iam::224193574799:role/cdk-hnb659fds-deploy-role-224193574799-us-east-2",
         "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::224193574799:role/cdk-hnb659fds-cfn-exec-role-224193574799-us-east-2",
-        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-224193574799-us-east-2/0be31f86d1bafc19e6cf289dce05808d89aacb5d9b6908f2c2d1d20d1265023a.json",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-224193574799-us-east-2/0f0e32fffdbbd53e38c55bec4b0c5e1f0a5401f577754c025afa712198eabb0c.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
         "additionalDependencies": [
@@ -88,18 +88,6 @@
             "data": "FititVpcPublicSubnet1DefaultRoute0EBA5170"
           }
         ],
-        "/FititNetworkStack/FititVpc/PublicSubnet1/EIP": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "FititVpcPublicSubnet1EIPC993DBD8"
-          }
-        ],
-        "/FititNetworkStack/FititVpc/PublicSubnet1/NATGateway": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "FititVpcPublicSubnet1NATGateway00D1D01A"
-          }
-        ],
         "/FititNetworkStack/FititVpc/PublicSubnet2/Subnet": [
           {
             "type": "aws:cdk:logicalId",
@@ -122,54 +110,6 @@
           {
             "type": "aws:cdk:logicalId",
             "data": "FititVpcPublicSubnet2DefaultRoute6327F618"
-          }
-        ],
-        "/FititNetworkStack/FititVpc/PrivateSubnet1/Subnet": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "FititVpcPrivateSubnet1Subnet94795FC7"
-          }
-        ],
-        "/FititNetworkStack/FititVpc/PrivateSubnet1/RouteTable": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "FititVpcPrivateSubnet1RouteTableDC624014"
-          }
-        ],
-        "/FititNetworkStack/FititVpc/PrivateSubnet1/RouteTableAssociation": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "FititVpcPrivateSubnet1RouteTableAssociationA3E48ADF"
-          }
-        ],
-        "/FititNetworkStack/FititVpc/PrivateSubnet1/DefaultRoute": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "FititVpcPrivateSubnet1DefaultRoute5F3D8727"
-          }
-        ],
-        "/FititNetworkStack/FititVpc/PrivateSubnet2/Subnet": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "FititVpcPrivateSubnet2SubnetB133FD13"
-          }
-        ],
-        "/FititNetworkStack/FititVpc/PrivateSubnet2/RouteTable": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "FititVpcPrivateSubnet2RouteTableE96F5AA2"
-          }
-        ],
-        "/FititNetworkStack/FititVpc/PrivateSubnet2/RouteTableAssociation": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "FititVpcPrivateSubnet2RouteTableAssociation7501DB28"
-          }
-        ],
-        "/FititNetworkStack/FititVpc/PrivateSubnet2/DefaultRoute": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "FititVpcPrivateSubnet2DefaultRoute3D548261"
           }
         ],
         "/FititNetworkStack/FititVpc/IGW": [
@@ -218,18 +158,6 @@
           {
             "type": "aws:cdk:logicalId",
             "data": "ExportsOutputRefFititVpcFE0F8966EC124A29"
-          }
-        ],
-        "/FititNetworkStack/Exports/Output{\"Ref\":\"FititVpcPrivateSubnet1Subnet94795FC7\"}": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "ExportsOutputRefFititVpcPrivateSubnet1Subnet94795FC7002819D6"
-          }
-        ],
-        "/FititNetworkStack/Exports/Output{\"Ref\":\"FititVpcPrivateSubnet2SubnetB133FD13\"}": [
-          {
-            "type": "aws:cdk:logicalId",
-            "data": "ExportsOutputRefFititVpcPrivateSubnet2SubnetB133FD13EAE36540"
           }
         ],
         "/FititNetworkStack/BootstrapVersion": [
@@ -475,7 +403,7 @@
         "validateOnSynth": false,
         "assumeRoleArn": "arn:${AWS::Partition}:iam::224193574799:role/cdk-hnb659fds-deploy-role-224193574799-us-east-2",
         "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::224193574799:role/cdk-hnb659fds-cfn-exec-role-224193574799-us-east-2",
-        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-224193574799-us-east-2/ae551d7984f02547b3b44436e9e31f83f77cfd03474bfe4df3d91087b48b8743.json",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-224193574799-us-east-2/1dd91738d0ab4c12b41a180ba60595d70e80ee0d2da17e22c16954522d442f74.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
         "additionalDependencies": [
@@ -644,7 +572,7 @@
         "validateOnSynth": false,
         "assumeRoleArn": "arn:${AWS::Partition}:iam::224193574799:role/cdk-hnb659fds-deploy-role-224193574799-us-east-2",
         "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::224193574799:role/cdk-hnb659fds-cfn-exec-role-224193574799-us-east-2",
-        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-224193574799-us-east-2/b0bf983d3181f9bff6050e9924420fefd1320ddb3005597d040f67f239fc1633.json",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-224193574799-us-east-2/0898cd9a57676251fd30752be4170ada147e94131ee6b08bec1238e2da71972b.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
         "additionalDependencies": [
@@ -777,7 +705,7 @@
               "new FargateService2 (C:\\Priyan\\VSC\\OWN\\fitit\\node_modules\\aws-cdk-lib\\core\\lib\\prop-injectable.js:1:681)",
               "new ApplicationLoadBalancedFargateService2 (C:\\Priyan\\VSC\\OWN\\fitit\\node_modules\\aws-cdk-lib\\aws-ecs-patterns\\lib\\fargate\\application-load-balanced-fargate-service.js:1:6099)",
               "new ApplicationLoadBalancedFargateService2 (C:\\Priyan\\VSC\\OWN\\fitit\\node_modules\\aws-cdk-lib\\core\\lib\\prop-injectable.js:1:681)",
-              "new FrontendStack (C:\\Priyan\\VSC\\OWN\\fitit\\infrastructure\\lib\\stacks\\frontend-stack.ts:108:27)",
+              "new FrontendStack (C:\\Priyan\\VSC\\OWN\\fitit\\infrastructure\\lib\\stacks\\frontend-stack.ts:109:27)",
               "Object.<anonymous> (C:\\Priyan\\VSC\\OWN\\fitit\\infrastructure\\bin\\app.ts:51:23)",
               "Module._compile (node:internal/modules/cjs/loader:1358:14)",
               "Module.m._compile (C:\\Users\\thaya\\AppData\\Local\\npm-cache\\_npx\\1bf7c3c15bf47d04\\node_modules\\ts-node\\src\\index.ts:1618:23)",
