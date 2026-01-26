@@ -292,7 +292,7 @@
     ],
     "Code": {
      "S3Bucket": "cdk-hnb659fds-assets-224193574799-us-east-2",
-     "S3Key": "b31d1e242df187fbab242c6c697ca79ebc9c2f67167c384aa9cb1b9821c82894.zip"
+     "S3Key": "1d073f14fe9b2bf0c2d533012c8f43a868ce0ddc7c923b04d0fa5add2d0f0e2b.zip"
     },
     "Description": "FitIt Backend API - Hono.js on Lambda",
     "Environment": {
@@ -313,7 +313,7 @@
      }
     },
     "FunctionName": "fitit-backend",
-    "Handler": "lambda.handler",
+    "Handler": "index.handler",
     "LoggingConfig": {
      "LogGroup": {
       "Ref": "BackendLogGroupDA10F1B2"
@@ -349,7 +349,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "FititBackendStack/BackendLambda/Resource",
-    "aws:asset:path": "C:\\Priyan\\VSC\\OWN\\fitit\\apps\\backend",
+    "aws:asset:path": "asset.1d073f14fe9b2bf0c2d533012c8f43a868ce0ddc7c923b04d0fa5add2d0f0e2b",
     "aws:asset:is-bundled": true,
     "aws:asset:property": "Code"
    }
@@ -541,7 +541,7 @@
   "CDKMetadata": {
    "Type": "AWS::CDK::Metadata",
    "Properties": {
-    "Analytics": "v2:deflate64:H4sIAAAAAAAA/12Q3WrDMAyFn2X3jtYl0Pt2sHUwaEkfoKiJZ9Q4dojkhmL87sMOhbGr8+noF9VQN1vYvODCVdcPlaUrxLNgNyhc+BKtNwzx25vP2YdJvf+4Jydlcbz2CPEjuE7Iu5z9yyc9j8RM3iVFOEJsvdU5UfTkLXWPUlcoKW4uyKyFYZdFcQP70A1a9sha4UQGRS/4uNcQDyLTbqLcniWHZ0FTxq+QrdYHWenLiTYzPk/7F5a6lFTZm9vJmewfg0xBknK+13Dj13u9gbf8rhsTVXNwQqOGdtVfsoI4bEsBAAA="
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/12Q3WrDMAyFn2X3jtYlsPu2sB8Y20gfIKiJG5QfO0RyQzF+96Fk3cWuvnOEzkF2DnnxDLsHXDirmz4b6AzxJFj3Bheu4uBbhvjh29fZh8kcL+6ukxlwPDdYOd/YjuFzxUtwtZB3hnCEWPrBambltx+ovqndVDJcVMhshWGvMFzAIdS9lQOy/a2HeLy4v1YN23kkZvIuGZyoRbEL3q45xDeRaT+RLinUngTb9YJN6Kj0QTb17sS2M96L/9l1LyWznqZxcq3Ov4JMQZLRZ0PHj9d8B0/6hR0TZXNwQqOFcuMPqsjtMl8BAAA="
    },
    "Metadata": {
     "aws:cdk:path": "FititBackendStack/CDKMetadata/Default"

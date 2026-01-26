@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import { NodejsFunction, OutputFormat } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as apigatewayv2Integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
@@ -25,7 +26,7 @@ export interface BackendStackProps extends cdk.StackProps {
  */
 export class BackendStack extends cdk.Stack {
   public readonly apiUrl: string;
-  public readonly lambdaFunction: lambda.Function;
+  public readonly lambdaFunction: NodejsFunction;
 
   constructor(scope: Construct, id: string, props: BackendStackProps) {
     super(scope, id, props);
@@ -39,48 +40,44 @@ export class BackendStack extends cdk.Stack {
     // aws secretsmanager create-secret --name /fitit/production/gemini-api-key --secret-string "your-key"
     const geminiSecretArn = this.node.tryGetContext('geminiSecretArn');
 
+    // Log group for Lambda
+    const logGroup = new logs.LogGroup(this, 'BackendLogGroup', {
+      logGroupName: '/aws/lambda/fitit-backend',
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     // ============================================
-    // Lambda Function
+    // Lambda Function (using NodejsFunction - no Docker required)
     // ============================================
-    this.lambdaFunction = new lambda.Function(this, 'BackendLambda', {
+    this.lambdaFunction = new NodejsFunction(this, 'BackendLambda', {
       functionName: 'fitit-backend',
       description: 'FitIt Backend API - Hono.js on Lambda',
       runtime: lambda.Runtime.NODEJS_20_X,
-      handler: 'lambda.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../../../apps/backend'), {
-        bundling: {
-          image: lambda.Runtime.NODEJS_20_X.bundlingImage,
-          command: [
-            'bash', '-c', [
-              'npm ci --omit=dev',
-              'npm run build',
-              'cp -r dist/* /asset-output/',
-              'cp -r node_modules /asset-output/',
-            ].join(' && '),
-          ],
-          environment: {
-            NODE_ENV: 'production',
-          },
-        },
-      }),
+      entry: path.join(__dirname, '../../../apps/backend/src/lambda.ts'),
+      handler: 'handler',
       memorySize: 512,
       timeout: cdk.Duration.seconds(30),
-      architecture: lambda.Architecture.ARM_64, // Cost-effective
+      architecture: lambda.Architecture.ARM_64,
       environment: {
         NODE_ENV: 'production',
-        // Note: AWS_REGION is automatically set by Lambda runtime
         DYNAMODB_PRODUCTS_TABLE: databaseStack.productsTable.tableName,
         DYNAMODB_SERVICE_PROFILES_TABLE: databaseStack.serviceProfilesTable.tableName,
         DYNAMODB_SERVICE_REQUESTS_TABLE: databaseStack.serviceRequestsTable.tableName,
         DYNAMODB_CHAT_TABLE: databaseStack.chatTable.tableName,
-        // GEMINI_API_KEY will be fetched from Secrets Manager at runtime
         ...(geminiSecretArn && { GEMINI_API_KEY_SECRET_ARN: geminiSecretArn }),
       },
-      logGroup: new logs.LogGroup(this, 'BackendLogGroup', {
-        logGroupName: '/aws/lambda/fitit-backend',
-        retention: logs.RetentionDays.ONE_MONTH,
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-      }),
+      logGroup,
+      bundling: {
+        minify: true,
+        sourceMap: true,
+        target: 'node20',
+        // Exclude AWS SDK (provided by Lambda runtime)
+        externalModules: ['@aws-sdk/*'],
+        // Use esbuild format compatible with ESM
+        format: OutputFormat.ESM,
+        banner: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);",
+      },
     });
 
     // Grant DynamoDB permissions
