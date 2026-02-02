@@ -1,0 +1,116 @@
+# FitIt Project Configuration
+
+## Project Overview
+FitIt is a full-stack home repair and maintenance platform built as a Turborepo monorepo. It connects users with professional service providers and allows shopping for home repair tools.
+
+## Tech Stack
+
+### Frontend (`apps/frontend`)
+- React 19 with TypeScript
+- Vite for build tooling
+- React Router v7 for routing
+- Tailwind CSS for styling
+- Lucide Icons for iconography
+- Deployed on AWS ECS Fargate with ALB
+
+### Backend (`apps/backend`)
+- Hono.js web framework
+- Node.js 20 runtime
+- AWS Lambda (serverless)
+- DynamoDB for data storage
+- Zod for schema validation
+- Google Gemini AI integration
+
+### Infrastructure (`infrastructure`)
+- AWS CDK with TypeScript
+- 4 stacks: Network, Database, Backend, Frontend
+- CloudWatch for logging
+- Secrets Manager for secure storage
+
+### Shared Packages (`packages/shared-types`)
+- Shared TypeScript type definitions
+
+## Project Structure
+```
+fitit/
+├── apps/
+│   ├── backend/         # Hono.js API (Lambda)
+│   └── frontend/        # React SPA (ECS Fargate)
+├── packages/
+│   └── shared-types/    # Shared TS types
+├── infrastructure/      # AWS CDK stacks
+├── .github/workflows/   # CI/CD pipelines
+└── turbo.json          # Turborepo config
+```
+
+## Development Commands
+```bash
+npm install           # Install all dependencies
+npm run dev           # Start all apps in dev mode
+npm run build         # Build all packages
+npm run lint          # Lint all packages
+npm run create-tables # Create DynamoDB tables
+npm run seed-data     # Seed initial data
+```
+
+## CDK Commands
+```bash
+npm run cdk:synth     # Synthesize CloudFormation
+npm run cdk:deploy    # Deploy all stacks
+npm run cdk:diff      # Show changes
+npm run cdk:destroy   # Destroy all stacks
+```
+
+## Environment Variables
+
+### Backend
+- `NODE_ENV` - Environment mode
+- `AWS_REGION` - AWS region (us-east-2)
+- `GEMINI_API_KEY` - Google AI API key
+- `PRODUCTS_TABLE` - DynamoDB table name
+- `SERVICE_PROFILES_TABLE` - DynamoDB table name
+- `SERVICE_REQUESTS_TABLE` - DynamoDB table name
+- `CHAT_TABLE` - DynamoDB table name
+
+### Frontend
+- `VITE_API_BASE_URL` - Backend API URL
+- `VITE_SUPABASE_URL` - Supabase project URL
+- `VITE_SUPABASE_ANON_KEY` - Supabase anon key
+
+## Code Conventions
+- Use TypeScript for all code
+- Follow ESLint rules configured in each package
+- Use Zod for runtime validation in backend
+- Use shared-types package for cross-app type definitions
+- Prefer functional components with hooks in React
+- Use AWS SDK v3 for all AWS operations
+
+## API Patterns
+- RESTful API design
+- All endpoints prefixed with `/api/`
+- Use Zod schemas for request/response validation
+- Return consistent error response format
+
+## Testing
+- Run tests with `npm test --if-present`
+- Backend uses DynamoDB for data layer (mock for tests)
+
+## Deployment
+- CI/CD via GitHub Actions
+- OIDC authentication for AWS (no static credentials)
+- Path-filtered deployments (only deploy changed components)
+- Manual deployment via `deploy-all.yml` workflow
+
+## Git Workflow
+- Main branch: `main`
+- Feature branches: `feature/*`
+- PRs require CI checks to pass
+- Sensitive files excluded via `.gitignore`
+
+## DynamoDB Tables
+| Table | Partition Key | Sort Key | GSIs |
+|-------|---------------|----------|------|
+| fitit-products | id | - | category-index |
+| fitit-service-profiles | id | - | profession-index |
+| fitit-service-requests | id | - | customerId-index, status-index |
+| fitit-chat | sessionId | timestamp | - |
