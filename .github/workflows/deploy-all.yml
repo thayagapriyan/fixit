@@ -1,0 +1,95 @@
+name: Deploy All
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "deploy-all" to confirm full deployment'
+        required: true
+        type: string
+      skip_infra:
+        description: 'Skip infrastructure CDK deploy'
+        required: false
+        type: boolean
+        default: false
+      skip_backend:
+        description: 'Skip backend deploy'
+        required: false
+        type: boolean
+        default: false
+      skip_frontend:
+        description: 'Skip frontend deploy'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-2
+
+jobs:
+  # ── Gate ──────────────────────────────────────────
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    if: inputs.confirm == 'deploy-all'
+    steps:
+      - run: echo "Full deployment confirmed"
+
+  # ── Infrastructure (CDK all stacks) ──────────────
+  infrastructure:
+    name: Infrastructure
+    needs: validate
+    if: ${{ !inputs.skip_infra }}
+    uses: ./.github/workflows/deploy-infrastructure.yml
+    with:
+      stack: all
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+
+  # ── Backend (CDK deploy BackendStack) ────────────
+  backend:
+    name: Backend
+    needs: [validate, infrastructure]
+    # Run even if infra was skipped
+    if: >-
+      !cancelled() && !failure() &&
+      !inputs.skip_backend
+    uses: ./.github/workflows/deploy-backend.yml
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+
+  # ── Frontend (Docker → ECR → ECS) ───────────────
+  frontend:
+    name: Frontend
+    needs: [validate, infrastructure, backend]
+    # Run even if infra/backend were skipped
+    if: >-
+      !cancelled() && !failure() &&
+      !inputs.skip_frontend
+    uses: ./.github/workflows/deploy-frontend.yml
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+  # ── Summary ──────────────────────────────────────
+  summary:
+    name: Deployment Summary
+    needs: [infrastructure, backend, frontend]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## Full Deployment Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Component | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-----------|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Infrastructure | \`${{ needs.infrastructure.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Backend | \`${{ needs.backend.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Frontend | \`${{ needs.frontend.result }}\` |" >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,74 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/backend/**'
+      - 'packages/shared-types/**'
+      - 'infrastructure/lib/stacks/backend-stack.ts'
+      - '.github/workflows/deploy-backend.yml'
+
+  workflow_dispatch: {}
+
+  # Callable from deploy-all
+  workflow_call:
+    secrets:
+      AWS_ROLE_ARN:
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-2
+
+jobs:
+  deploy:
+    name: Deploy Backend (CDK)
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build all packages
+        env:
+          VITE_API_BASE_URL: http://placeholder
+          VITE_SUPABASE_URL: https://placeholder.supabase.co
+          VITE_SUPABASE_ANON_KEY: placeholder
+        run: npm run build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: CDK Diff
+        working-directory: infrastructure
+        run: npx cdk diff FititBackendStack || true
+
+      - name: CDK Deploy Backend
+        working-directory: infrastructure
+        run: npx cdk deploy FititBackendStack --require-approval never
+
+      - name: Output API URL
+        run: |
+          API_URL=$(aws cloudformation describe-stacks \
+            --stack-name FititBackendStack \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
+            --output text)
+          echo "### Backend Deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **API URL:** \`$API_URL\`" >> "$GITHUB_STEP_SUMMARY"

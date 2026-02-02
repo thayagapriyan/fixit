@@ -3,16 +3,11 @@
  * Handles user profile operations with the backend API
  */
 
+import { UserRole } from '../types';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
-/**
- * User role enumeration
- */
-export enum UserRole {
-  GUEST = 'GUEST',
-  CUSTOMER = 'CUSTOMER',
-  PROFESSIONAL = 'PROFESSIONAL',
-}
+export { UserRole };
 
 /**
  * User profile interface from DynamoDB

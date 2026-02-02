@@ -65,6 +65,7 @@ export class BackendStack extends cdk.Stack {
         DYNAMODB_SERVICE_PROFILES_TABLE: databaseStack.serviceProfilesTable.tableName,
         DYNAMODB_SERVICE_REQUESTS_TABLE: databaseStack.serviceRequestsTable.tableName,
         DYNAMODB_CHAT_TABLE: databaseStack.chatTable.tableName,
+        DYNAMODB_USERS_TABLE: databaseStack.usersTable.tableName,
         ...(geminiSecretArn && { GEMINI_API_KEY_SECRET_ARN: geminiSecretArn }),
       },
       logGroup,
@@ -85,6 +86,8 @@ export class BackendStack extends cdk.Stack {
     databaseStack.serviceProfilesTable.grantReadWriteData(this.lambdaFunction);
     databaseStack.serviceRequestsTable.grantReadWriteData(this.lambdaFunction);
     databaseStack.chatTable.grantReadWriteData(this.lambdaFunction);
+    databaseStack.usersTable.grantReadWriteData(this.lambdaFunction);
+    databaseStack.countersTable.grantReadWriteData(this.lambdaFunction);
 
     // Grant Secrets Manager read permission (if secret ARN provided)
     if (geminiSecretArn) {

@@ -14,7 +14,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$ProjectRoot = Split-Path $PSScriptRoot -Parent
+$ScriptsDir = $PSScriptRoot
+$InfraRoot = Split-Path $ScriptsDir -Parent
+$ProjectRoot = Split-Path $InfraRoot -Parent
 $FrontendDir = Join-Path $ProjectRoot "apps/frontend"
 
 function Write-Step { param($step, $msg) Write-Host "[$step] $msg" -ForegroundColor Yellow }
@@ -54,10 +56,11 @@ Get-Content $EnvFile | ForEach-Object {
 Write-Info "Loaded: $EnvFile"
 
 # Verify required variables
-$required = @("VITE_API_BASE_URL", "VITE_FIREBASE_API_KEY", "VITE_FIREBASE_PROJECT_ID")
+$required = @("VITE_API_BASE_URL", "VITE_SUPABASE_URL", "VITE_SUPABASE_ANON_KEY")
 foreach ($var in $required) {
-    if (-not [Environment]::GetEnvironmentVariable($var, "Process")) {
-        throw "Missing required variable: $var"
+    $val = [Environment]::GetEnvironmentVariable($var, "Process")
+    if (-not $val -or $val -match "your-") {
+        throw "Missing or placeholder value for: $var. Update your .env.production file."
     }
 }
 
@@ -84,12 +87,8 @@ Push-Location $FrontendDir
 try {
     # Set VITE env vars for the build
     $env:VITE_API_BASE_URL = [Environment]::GetEnvironmentVariable("VITE_API_BASE_URL", "Process")
-    $env:VITE_FIREBASE_API_KEY = [Environment]::GetEnvironmentVariable("VITE_FIREBASE_API_KEY", "Process")
-    $env:VITE_FIREBASE_AUTH_DOMAIN = [Environment]::GetEnvironmentVariable("VITE_FIREBASE_AUTH_DOMAIN", "Process")
-    $env:VITE_FIREBASE_PROJECT_ID = [Environment]::GetEnvironmentVariable("VITE_FIREBASE_PROJECT_ID", "Process")
-    $env:VITE_FIREBASE_STORAGE_BUCKET = [Environment]::GetEnvironmentVariable("VITE_FIREBASE_STORAGE_BUCKET", "Process")
-    $env:VITE_FIREBASE_MESSAGING_SENDER_ID = [Environment]::GetEnvironmentVariable("VITE_FIREBASE_MESSAGING_SENDER_ID", "Process")
-    $env:VITE_FIREBASE_APP_ID = [Environment]::GetEnvironmentVariable("VITE_FIREBASE_APP_ID", "Process")
+    $env:VITE_SUPABASE_URL = [Environment]::GetEnvironmentVariable("VITE_SUPABASE_URL", "Process")
+    $env:VITE_SUPABASE_ANON_KEY = [Environment]::GetEnvironmentVariable("VITE_SUPABASE_ANON_KEY", "Process")
     
     npm run build
     if ($LASTEXITCODE -ne 0) { throw "Frontend build failed" }
@@ -126,8 +125,9 @@ Write-Success "Image built: ${RepoName}:$ImageTag"
 # ============================================
 Write-Step "5/6" "Pushing to ECR..."
 
-# Login to ECR
-aws ecr get-login-password --region $Region | docker login --username AWS --password-stdin $EcrUri
+# Login to ECR - use explicit variable to avoid pipeline issues
+$ecrPassword = aws ecr get-login-password --region $Region
+$ecrPassword | docker login --username AWS --password-stdin $EcrUri
 if ($LASTEXITCODE -ne 0) { throw "ECR login failed" }
 
 # Tag and push
@@ -163,7 +163,7 @@ if ($LASTEXITCODE -eq 0) {
     
     Write-Host "`nFrontend URL:" -ForegroundColor Cyan
     $url = aws cloudformation describe-stacks --stack-name FititFrontendStack --query "Stacks[0].Outputs[?OutputKey=='LoadBalancerUrl'].OutputValue" --output text
-    Write-Host "  http://$url" -ForegroundColor White
+    Write-Host "  $url" -ForegroundColor White
 }
 else {
     throw "ECS service update failed"
