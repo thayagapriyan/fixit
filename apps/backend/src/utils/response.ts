@@ -1,5 +1,5 @@
 import type { Context } from 'hono';
-import type { ApiSuccessResponse, ApiErrorResponse } from '../types/index.js';
+import type { ApiSuccessResponse, ApiErrorResponse } from '@fitit/shared-types';
 import { AppError } from './errors.js';
 
 /**
@@ -22,7 +22,7 @@ export function success<T>(
     ...(meta && { meta }),
   };
 
-  return c.json(response, statusCode as any);
+  return c.json(response, statusCode as 200 | 201 | 400 | 401 | 403 | 404 | 409 | 500);
 }
 
 /**
@@ -35,7 +35,7 @@ export function created<T>(c: Context, data: T): Response {
 /**
  * Send a no content response (204)
  */
-export function noContent(c: Context): Response {
+export function noContent(_c: Context): Response {
   return new Response(null, { status: 204 });
 }
 
@@ -58,14 +58,14 @@ export function error(
     },
   };
 
-  return c.json(response, statusCode as any);
+  return c.json(response, statusCode as 200 | 201 | 400 | 401 | 403 | 404 | 409 | 500);
 }
 
 /**
  * Send an error response from an AppError
  */
 export function fromError(c: Context, err: AppError): Response {
-  return c.json(err.toJSON(), err.statusCode as any);
+  return c.json(err.toJSON(), err.statusCode as 200 | 201 | 400 | 401 | 403 | 404 | 409 | 500);
 }
 
 /**

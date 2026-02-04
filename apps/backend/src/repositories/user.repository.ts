@@ -5,18 +5,13 @@ import {
   UpdateCommand,
   ScanCommand,
 } from '@aws-sdk/lib-dynamodb';
+import { UserRole } from '@fitit/shared-types';
 import { dynamoClient } from '../config/dynamodb.js';
 import { config } from '../config/index.js';
 import { DatabaseError, NotFoundError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
 
-/**
- * User role enumeration
- */
-export enum UserRole {
-  CUSTOMER = 'CUSTOMER',
-  PROFESSIONAL = 'PROFESSIONAL',
-}
+export { UserRole };
 
 /**
  * User profile interface

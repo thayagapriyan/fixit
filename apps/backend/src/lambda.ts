@@ -2,7 +2,6 @@ import { Hono } from 'hono';
 import { handle } from 'hono/aws-lambda';
 import { cors } from 'hono/cors';
 import { logger as honoLogger } from 'hono/logger';
-import { config } from './config/index.js';
 import { setupRoutes } from './routes/index.js';
 import { logger } from './utils/index.js';
 import { AppError, fromError, errors } from './utils/index.js';

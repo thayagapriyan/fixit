@@ -2,24 +2,14 @@
  * Simple fetch wrapper for API calls
  */
 
+import type { ApiSuccessResponse, ApiErrorResponse } from '@fitit/shared-types';
+
 export interface ApiError {
   message: string;
   status?: number;
 }
 
-export interface ApiSuccessResponse<T> {
-  success: true;
-  data: T;
-}
-
-export interface ApiErrorResponse {
-  success: false;
-  error: {
-    code: string;
-    message: string;
-  };
-}
-
+export type { ApiSuccessResponse, ApiErrorResponse };
 export type ApiResponse<T> = ApiSuccessResponse<T> | ApiErrorResponse;
 
 export class ApiClient {

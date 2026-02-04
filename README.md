@@ -1,4 +1,4 @@
-# FitIt Web Application
+# FixIt Web Application
 
 **A Modern Home Repair & Maintenance Platform**
 
@@ -15,7 +15,7 @@ Connect with professional service providers and shop for quality home repair too
 
 ## Overview
 
-FitIt is a full-stack web application that serves as a one-stop platform for home repair and maintenance needs. Users can browse and purchase home repair tools, connect with professional service providers, and get AI-powered DIY guidance.
+FixIt is a full-stack web application that serves as a one-stop platform for home repair and maintenance needs. Users can browse and purchase home repair tools, connect with professional service providers, and get AI-powered DIY guidance.
 
 ### Key Features
 

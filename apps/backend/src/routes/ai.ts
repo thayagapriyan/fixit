@@ -4,9 +4,9 @@ import { GoogleGenAI } from '@google/genai';
 import { config } from '../config/index.js';
 import { chatRepository } from '../repositories/index.js';
 import { success, fromError, errors } from '../utils/response.js';
-import { AppError, ValidationError, ExternalServiceError } from '../utils/errors.js';
+import { AppError, ValidationError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
-import type { AIResponse } from '../types/index.js';
+import type { AIResponse } from '@fitit/shared-types';
 
 /**
  * AI API Routes
