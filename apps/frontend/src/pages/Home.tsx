@@ -33,7 +33,7 @@ const Home: React.FC = () => {
             </span>
           </h1>
           <p className="text-gray-400 text-lg max-w-lg">
-            Whether you need a pro or just the right tool, FixItHub connects you with everything needed to solve household issues.
+            Whether you need a pro or just the right tool, FixIt connects you with everything needed to solve household issues.
           </p>
           <div className="flex flex-wrap gap-4">
             <button

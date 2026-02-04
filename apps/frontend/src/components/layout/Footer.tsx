@@ -10,10 +10,10 @@ const Footer: React.FC = () => {
             <div className="bg-gray-900 p-1.5 rounded-lg">
               <Wrench className="text-white h-4 w-4" />
             </div>
-            <span className="font-bold text-lg text-gray-900">FixItHub</span>
+            <span className="font-bold text-lg text-gray-900">FixIt</span>
           </div>
           <p className="text-gray-400 text-sm">
-            &copy; 2024 FixItHub. All rights reserved. Powered by Google Gemini.
+            &copy; 2024 FixIt. All rights reserved. Powered by Google Gemini.
           </p>
         </div>
       </div>

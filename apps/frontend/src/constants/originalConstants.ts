@@ -1,4 +1,4 @@
-import { Product, ServiceProfile, ServiceRequest } from './types';
+import { Product, ServiceProfile, ServiceRequest } from '../types';
 
 export const TOOLS_DATA: Product[] = [
   {

@@ -71,25 +71,24 @@ users.post('/', async (c) => {
 });
 
 /**
- * GET /api/users/:id
- * Get user by Supabase auth ID
+ * GET /api/users
+ * Get all users (admin endpoint)
  */
-users.get('/:id', async (c) => {
+users.get('/', async (c) => {
   try {
-    const id = c.req.param('id');
-    const user = await userRepository.getById(id);
+    const limitParam = c.req.query('limit');
+    const limit = limitParam ? parseInt(limitParam, 10) : 50;
 
-    if (!user) {
-      return errors.notFound(c, 'User');
-    }
+    const allUsers = await userRepository.getAll(limit);
 
     return c.json({
       success: true,
-      data: user,
+      data: allUsers,
+      count: allUsers.length,
     });
   } catch (error) {
-    logger.error('Failed to get user', { error: String(error) });
-    return errors.internalError(c, 'Failed to retrieve user');
+    logger.error('Failed to get all users', { error: String(error) });
+    return errors.internalError(c, 'Failed to retrieve users');
   }
 });
 
@@ -165,6 +164,29 @@ users.get('/role/:role', async (c) => {
 });
 
 /**
+ * GET /api/users/:id
+ * Get user by Supabase auth ID
+ */
+users.get('/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const user = await userRepository.getById(id);
+
+    if (!user) {
+      return errors.notFound(c, 'User');
+    }
+
+    return c.json({
+      success: true,
+      data: user,
+    });
+  } catch (error) {
+    logger.error('Failed to get user', { error: String(error) });
+    return errors.internalError(c, 'Failed to retrieve user');
+  }
+});
+
+/**
  * PUT /api/users/:id
  * Update user profile
  */
@@ -195,27 +217,5 @@ users.put('/:id', async (c) => {
   } catch (error) {
     logger.error('Failed to update user', { error: String(error) });
     return errors.internalError(c, 'Failed to update user profile');
-  }
-});
-
-/**
- * GET /api/users
- * Get all users (admin endpoint)
- */
-users.get('/', async (c) => {
-  try {
-    const limitParam = c.req.query('limit');
-    const limit = limitParam ? parseInt(limitParam, 10) : 50;
-
-    const allUsers = await userRepository.getAll(limit);
-
-    return c.json({
-      success: true,
-      data: allUsers,
-      count: allUsers.length,
-    });
-  } catch (error) {
-    logger.error('Failed to get all users', { error: String(error) });
-    return errors.internalError(c, 'Failed to retrieve users');
   }
 });

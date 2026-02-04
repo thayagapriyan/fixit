@@ -48,7 +48,7 @@ const Login: React.FC = () => {
             <Wrench className="text-white h-8 w-8" />
           </div>
           <h1 className="text-2xl font-bold text-white">Welcome Back</h1>
-          <p className="text-blue-100 mt-1">Sign in to your FixItHub account</p>
+          <p className="text-blue-100 mt-1">Sign in to your FixIt account</p>
         </div>
 
         {/* Form */}

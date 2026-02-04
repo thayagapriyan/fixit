@@ -100,7 +100,7 @@ const Signup: React.FC = () => {
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Account Created!</h2>
           <p className="text-gray-600 mb-2">
-            Welcome to FixItHub! Your account is ready.
+            Welcome to FixIt! Your account is ready.
           </p>
           <p className="text-sm text-gray-500">Redirecting to home...</p>
         </div>
@@ -117,7 +117,7 @@ const Signup: React.FC = () => {
             <Wrench className="text-white h-8 w-8" />
           </div>
           <h1 className="text-2xl font-bold text-white">Create Account</h1>
-          <p className="text-blue-100 mt-1">Join FixItHub today</p>
+          <p className="text-blue-100 mt-1">Join FixIt today</p>
         </div>
 
         {/* Form */}

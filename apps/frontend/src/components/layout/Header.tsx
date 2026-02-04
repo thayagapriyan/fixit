@@ -54,7 +54,7 @@ const Header: React.FC<HeaderProps> = ({ role, onLogout, isLoggedIn }) => {
               <div className="bg-blue-600 p-1.5 rounded-lg">
                 <Wrench className="text-white h-5 w-5" />
               </div>
-              <span className="font-bold text-xl tracking-tight text-gray-900">FixItHub</span>
+              <span className="font-bold text-xl tracking-tight text-gray-900">FixIt</span>
             </Link>
 
             {/* Desktop Nav */}
