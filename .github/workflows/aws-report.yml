@@ -1,0 +1,839 @@
+name: AWS Services & Usage Report
+
+# ============================================================
+# COMPREHENSIVE AWS REPORT WORKFLOW
+#
+# Generates a full report of all AWS resources, operational
+# metrics, and costs directly in the GitHub Actions Job Summary.
+#
+# Report sections:
+#   1. Resource Inventory   (CloudFormation, DynamoDB, Lambda,
+#                            ECS, ECR, API Gateway, VPC,
+#                            CloudWatch Logs, Secrets Manager)
+#   2. CloudWatch Metrics   (Lambda, DynamoDB, ECS, API Gateway)
+#   3. Cost Explorer        (Daily costs, totals, trends)
+#
+# Trigger: Manual only (workflow_dispatch)
+# ============================================================
+
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Number of days to look back for metrics/costs (default: 7)'
+        required: false
+        type: string
+        default: '7'
+      start_date:
+        description: 'Override start date (YYYY-MM-DD). Takes priority over "days".'
+        required: false
+        type: string
+      end_date:
+        description: 'Override end date (YYYY-MM-DD). Defaults to today.'
+        required: false
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-2
+
+  # Resource names (matching destroy-resources.yml)
+  LAMBDA_FUNCTION: fixit-backend
+  ECS_CLUSTER: fixit-frontend-cluster
+  ECS_SERVICE: fixit-frontend-service
+  ECR_REPOSITORY: fixit-frontend
+
+  # DynamoDB table names (including legacy "fitit" typos still in CDK)
+  DYNAMODB_TABLES: >-
+    fixit-products
+    fixit-service-profiles
+    fitit-service-requests
+    fixit-chat
+    fitit-users
+    fixit-counters
+
+  # CloudWatch log groups
+  LOG_GROUPS: >-
+    /ecs/fixit-frontend
+    /aws/lambda/fixit-backend
+
+  # CDK stack names
+  CF_STACKS: >-
+    FixitNetworkStack
+    FixitDatabaseStack
+    FixitBackendStack
+    FixitFrontendStack
+
+jobs:
+  report:
+    name: Generate AWS Report
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Setup ───────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set date range
+        id: dates
+        run: |
+          if [ -n "${{ inputs.start_date }}" ]; then
+            START_DATE="${{ inputs.start_date }}"
+          else
+            DAYS="${{ inputs.days }}"
+            DAYS=${DAYS:-7}
+            START_DATE=$(date -u -d "${DAYS} days ago" +%Y-%m-%d)
+          fi
+
+          if [ -n "${{ inputs.end_date }}" ]; then
+            END_DATE="${{ inputs.end_date }}"
+          else
+            END_DATE=$(date -u +%Y-%m-%d)
+          fi
+
+          echo "START_DATE=$START_DATE" >> "$GITHUB_OUTPUT"
+          echo "END_DATE=$END_DATE" >> "$GITHUB_OUTPUT"
+          echo "Date range: $START_DATE to $END_DATE"
+
+      # ── Report Header ──────────────────────────────────
+      - name: Report header
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" << 'HEADER'
+          # ☁️ AWS Services & Usage Report
+
+          HEADER
+
+          echo "| Detail | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|--------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Region** | \`${{ env.AWS_REGION }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Date Range** | \`${{ steps.dates.outputs.START_DATE }}\` to \`${{ steps.dates.outputs.END_DATE }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Triggered by** | \`${{ github.actor }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Run** | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+      # ── Resource Inventory ─────────────────────────────
+      - name: CloudFormation stacks
+        run: |
+          echo "---" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "## 📦 CloudFormation Stacks" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Stack | Status | Last Updated | Resources |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|--------|--------------|-----------|" >> "$GITHUB_STEP_SUMMARY"
+
+          for STACK in $CF_STACKS; do
+            INFO=$(aws cloudformation describe-stacks --stack-name "$STACK" \
+              --query "Stacks[0].[StackStatus,LastUpdatedTime]" \
+              --output text 2>/dev/null || echo "NOT_FOUND N/A")
+            STATUS=$(echo "$INFO" | awk '{print $1}')
+            UPDATED=$(echo "$INFO" | awk '{print $2}')
+
+            # Get resource count
+            RESOURCE_COUNT=$(aws cloudformation list-stack-resources --stack-name "$STACK" \
+              --query "length(StackResourceSummaries)" \
+              --output text 2>/dev/null || echo "0")
+
+            if [ "$STATUS" = "NOT_FOUND" ]; then
+              echo "| \`$STACK\` | ⚪ \`NOT_FOUND\` | - | - |" >> "$GITHUB_STEP_SUMMARY"
+            elif echo "$STATUS" | grep -q "COMPLETE"; then
+              echo "| \`$STACK\` | 🟢 \`$STATUS\` | $UPDATED | $RESOURCE_COUNT |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "| \`$STACK\` | 🟡 \`$STATUS\` | $UPDATED | $RESOURCE_COUNT |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: DynamoDB tables inventory
+        run: |
+          echo "## 🗄️ DynamoDB Tables" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Table | Status | Item Count | Size | Billing | GSIs | PITR |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|--------|------------|------|---------|------|------|" >> "$GITHUB_STEP_SUMMARY"
+
+          for TABLE in $DYNAMODB_TABLES; do
+            INFO=$(aws dynamodb describe-table --table-name "$TABLE" \
+              --query "Table.[TableStatus,ItemCount,TableSizeBytes,BillingModeSummary.BillingMode,length(GlobalSecondaryIndexes||\`[]\`),ContinuousBackupsDescription]" \
+              --output text 2>/dev/null || echo "")
+
+            if [ -z "$INFO" ]; then
+              echo "| \`$TABLE\` | ⚪ \`NOT_FOUND\` | - | - | - | - | - |" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+
+            STATUS=$(echo "$INFO" | awk '{print $1}')
+            ITEMS=$(echo "$INFO" | awk '{print $2}')
+            SIZE_BYTES=$(echo "$INFO" | awk '{print $3}')
+            BILLING=$(echo "$INFO" | awk '{print $4}')
+            GSIS=$(echo "$INFO" | awk '{print $5}')
+
+            # Human-readable size
+            if [ "$SIZE_BYTES" -gt 1073741824 ] 2>/dev/null; then
+              SIZE="$(awk "BEGIN {printf \"%.2f\", $SIZE_BYTES/1073741824}") GB"
+            elif [ "$SIZE_BYTES" -gt 1048576 ] 2>/dev/null; then
+              SIZE="$(awk "BEGIN {printf \"%.2f\", $SIZE_BYTES/1048576}") MB"
+            elif [ "$SIZE_BYTES" -gt 1024 ] 2>/dev/null; then
+              SIZE="$(awk "BEGIN {printf \"%.2f\", $SIZE_BYTES/1024}") KB"
+            else
+              SIZE="${SIZE_BYTES} B"
+            fi
+
+            # PITR status
+            PITR=$(aws dynamodb describe-continuous-backups --table-name "$TABLE" \
+              --query "ContinuousBackupsDescription.PointInTimeRecoveryDescription.PointInTimeRecoveryStatus" \
+              --output text 2>/dev/null || echo "UNKNOWN")
+
+            PITR_ICON="❌"
+            [ "$PITR" = "ENABLED" ] && PITR_ICON="✅"
+
+            echo "| \`$TABLE\` | 🟢 \`$STATUS\` | $ITEMS | $SIZE | \`$BILLING\` | $GSIS | $PITR_ICON |" >> "$GITHUB_STEP_SUMMARY"
+          done
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Lambda function inventory
+        run: |
+          echo "## ⚡ Lambda Functions" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          INFO=$(aws lambda get-function-configuration --function-name "$LAMBDA_FUNCTION" \
+            --query "[Runtime,Architectures[0],MemorySize,Timeout,CodeSize,LastModified,State]" \
+            --output text 2>/dev/null || echo "")
+
+          if [ -z "$INFO" ]; then
+            echo "> Lambda function \`$LAMBDA_FUNCTION\` not found." >> "$GITHUB_STEP_SUMMARY"
+          else
+            RUNTIME=$(echo "$INFO" | awk '{print $1}')
+            ARCH=$(echo "$INFO" | awk '{print $2}')
+            MEMORY=$(echo "$INFO" | awk '{print $3}')
+            TIMEOUT=$(echo "$INFO" | awk '{print $4}')
+            CODESIZE_BYTES=$(echo "$INFO" | awk '{print $5}')
+            MODIFIED=$(echo "$INFO" | awk '{print $6}')
+            STATE=$(echo "$INFO" | awk '{print $7}')
+
+            CODESIZE="$(awk "BEGIN {printf \"%.2f\", $CODESIZE_BYTES/1048576}") MB"
+
+            echo "| Property | Value |" >> "$GITHUB_STEP_SUMMARY"
+            echo "|----------|-------|" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Function Name | \`$LAMBDA_FUNCTION\` |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| State | 🟢 \`$STATE\` |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Runtime | \`$RUNTIME\` |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Architecture | \`$ARCH\` |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Memory | $MEMORY MB |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Timeout | ${TIMEOUT}s |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Code Size | $CODESIZE |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Last Modified | $MODIFIED |" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: ECS Fargate inventory
+        run: |
+          echo "## 🐳 ECS Fargate" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          SVC_JSON=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
+            --query "services[0]" --output json 2>/dev/null || echo "")
+
+          if [ -z "$SVC_JSON" ] || [ "$SVC_JSON" = "null" ]; then
+            echo "> ECS service \`$ECS_SERVICE\` not found in cluster \`$ECS_CLUSTER\`." >> "$GITHUB_STEP_SUMMARY"
+          else
+            SVC_STATUS=$(echo "$SVC_JSON" | jq -r '.status // "UNKNOWN"')
+            RUNNING=$(echo "$SVC_JSON" | jq -r '.runningCount // 0')
+            DESIRED=$(echo "$SVC_JSON" | jq -r '.desiredCount // 0')
+            PENDING=$(echo "$SVC_JSON" | jq -r '.pendingCount // 0')
+            LAUNCH=$(echo "$SVC_JSON" | jq -r '.launchType // "UNKNOWN"')
+            TASK_DEF=$(echo "$SVC_JSON" | jq -r '.taskDefinition // ""')
+
+            echo "| Property | Value |" >> "$GITHUB_STEP_SUMMARY"
+            echo "|----------|-------|" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Cluster | \`$ECS_CLUSTER\` |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Service | \`$ECS_SERVICE\` |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Status | 🟢 \`$SVC_STATUS\` |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Launch Type | \`$LAUNCH\` |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Tasks (Running / Desired / Pending) | $RUNNING / $DESIRED / $PENDING |" >> "$GITHUB_STEP_SUMMARY"
+
+            # Task definition details
+            if [ -n "$TASK_DEF" ] && [ "$TASK_DEF" != "null" ]; then
+              TD_INFO=$(aws ecs describe-task-definition --task-definition "$TASK_DEF" \
+                --query "taskDefinition.[cpu,memory,taskDefinitionArn]" \
+                --output text 2>/dev/null || echo "N/A N/A N/A")
+              CPU=$(echo "$TD_INFO" | awk '{print $1}')
+              MEM=$(echo "$TD_INFO" | awk '{print $2}')
+              TD_ARN=$(echo "$TD_INFO" | awk '{print $3}')
+              TD_REV=$(echo "$TD_ARN" | grep -oP ':\K[0-9]+$' || echo "?")
+              echo "| Task Definition | Revision \`$TD_REV\` |" >> "$GITHUB_STEP_SUMMARY"
+              echo "| Task CPU / Memory | ${CPU} units / ${MEM} MiB |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+
+            # Deployments
+            DEPLOY_COUNT=$(echo "$SVC_JSON" | jq '.deployments | length')
+            if [ "$DEPLOY_COUNT" -gt 0 ]; then
+              DEPLOY_STATUS=$(echo "$SVC_JSON" | jq -r '.deployments[0].rolloutState // "UNKNOWN"')
+              echo "| Active Deployment | \`$DEPLOY_STATUS\` |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: ECR repository inventory
+        run: |
+          echo "## 📦 ECR Repository" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          REPO_JSON=$(aws ecr describe-repositories --repository-names "$ECR_REPOSITORY" \
+            --query "repositories[0]" --output json 2>/dev/null || echo "")
+
+          if [ -z "$REPO_JSON" ] || [ "$REPO_JSON" = "null" ]; then
+            echo "> ECR repository \`$ECR_REPOSITORY\` not found." >> "$GITHUB_STEP_SUMMARY"
+          else
+            REPO_URI=$(echo "$REPO_JSON" | jq -r '.repositoryUri // "N/A"')
+            SCAN=$(echo "$REPO_JSON" | jq -r '.imageScanningConfiguration.scanOnPush // false')
+            IMAGE_COUNT=$(aws ecr list-images --repository-name "$ECR_REPOSITORY" \
+              --query "length(imageIds)" --output text 2>/dev/null || echo "0")
+
+            # Get latest image info
+            LATEST_TAG=$(aws ecr describe-images --repository-name "$ECR_REPOSITORY" \
+              --query "sort_by(imageDetails,&imagePushedAt)[-1].[imageTags[0],imagePushedAt,imageSizeInBytes]" \
+              --output text 2>/dev/null || echo "N/A N/A 0")
+            LATEST_TAG_NAME=$(echo "$LATEST_TAG" | awk '{print $1}')
+            LATEST_PUSHED=$(echo "$LATEST_TAG" | awk '{print $2}')
+            LATEST_SIZE_BYTES=$(echo "$LATEST_TAG" | awk '{print $3}')
+            LATEST_SIZE="$(awk "BEGIN {printf \"%.1f\", $LATEST_SIZE_BYTES/1048576}" 2>/dev/null || echo "0") MB"
+
+            echo "| Property | Value |" >> "$GITHUB_STEP_SUMMARY"
+            echo "|----------|-------|" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Repository | \`$ECR_REPOSITORY\` |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| URI | \`$REPO_URI\` |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Image Count | $IMAGE_COUNT |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Scan on Push | \`$SCAN\` |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Latest Tag | \`$LATEST_TAG_NAME\` |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Latest Pushed | $LATEST_PUSHED |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Latest Size | $LATEST_SIZE |" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: API Gateway inventory
+        run: |
+          echo "## 🌐 API Gateway" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          API_JSON=$(aws apigatewayv2 get-apis \
+            --query "Items[?Name=='fixit-backend-api'] | [0]" \
+            --output json 2>/dev/null || echo "")
+
+          if [ -z "$API_JSON" ] || [ "$API_JSON" = "null" ]; then
+            echo "> API Gateway \`fixit-backend-api\` not found." >> "$GITHUB_STEP_SUMMARY"
+          else
+            API_ID=$(echo "$API_JSON" | jq -r '.ApiId // "N/A"')
+            API_ENDPOINT=$(echo "$API_JSON" | jq -r '.ApiEndpoint // "N/A"')
+            PROTOCOL=$(echo "$API_JSON" | jq -r '.ProtocolType // "N/A"')
+            CREATED=$(echo "$API_JSON" | jq -r '.CreatedDate // "N/A"')
+
+            # CORS info
+            CORS_ORIGINS=$(echo "$API_JSON" | jq -r '.CorsConfiguration.AllowOrigins // ["N/A"] | join(", ")' 2>/dev/null || echo "N/A")
+
+            echo "| Property | Value |" >> "$GITHUB_STEP_SUMMARY"
+            echo "|----------|-------|" >> "$GITHUB_STEP_SUMMARY"
+            echo "| API Name | \`fixit-backend-api\` |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| API ID | \`$API_ID\` |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Protocol | \`$PROTOCOL\` |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Endpoint | \`$API_ENDPOINT\` |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| CORS Origins | \`$CORS_ORIGINS\` |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Created | $CREATED |" >> "$GITHUB_STEP_SUMMARY"
+
+            # Save API_ID for metrics step
+            echo "API_ID=$API_ID" >> "$GITHUB_ENV"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: VPC & network inventory
+        run: |
+          echo "## 🔒 VPC & Network" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          VPC_JSON=$(aws ec2 describe-vpcs \
+            --filters "Name=tag:Name,Values=*fixit*" \
+            --query "Vpcs[0]" --output json 2>/dev/null || echo "")
+
+          if [ -z "$VPC_JSON" ] || [ "$VPC_JSON" = "null" ]; then
+            echo "> VPC with tag \`fixit\` not found." >> "$GITHUB_STEP_SUMMARY"
+          else
+            VPC_ID=$(echo "$VPC_JSON" | jq -r '.VpcId // "N/A"')
+            CIDR=$(echo "$VPC_JSON" | jq -r '.CidrBlock // "N/A"')
+            VPC_STATE=$(echo "$VPC_JSON" | jq -r '.State // "N/A"')
+
+            # Count subnets
+            SUBNET_COUNT=$(aws ec2 describe-subnets \
+              --filters "Name=vpc-id,Values=$VPC_ID" \
+              --query "length(Subnets)" --output text 2>/dev/null || echo "0")
+
+            # Count security groups (excluding default)
+            SG_COUNT=$(aws ec2 describe-security-groups \
+              --filters "Name=vpc-id,Values=$VPC_ID" \
+              --query "length(SecurityGroups[?GroupName!='default'])" \
+              --output text 2>/dev/null || echo "0")
+
+            # Check for NAT Gateways
+            NAT_COUNT=$(aws ec2 describe-nat-gateways \
+              --filter "Name=vpc-id,Values=$VPC_ID" "Name=state,Values=available" \
+              --query "length(NatGateways)" --output text 2>/dev/null || echo "0")
+
+            # Check for ALB
+            ALB_INFO=$(aws elbv2 describe-load-balancers \
+              --query "LoadBalancers[?VpcId=='$VPC_ID'].[LoadBalancerName,DNSName,State.Code] | [0]" \
+              --output text 2>/dev/null || echo "N/A N/A N/A")
+            ALB_NAME=$(echo "$ALB_INFO" | awk '{print $1}')
+            ALB_DNS=$(echo "$ALB_INFO" | awk '{print $2}')
+            ALB_STATE=$(echo "$ALB_INFO" | awk '{print $3}')
+
+            echo "| Property | Value |" >> "$GITHUB_STEP_SUMMARY"
+            echo "|----------|-------|" >> "$GITHUB_STEP_SUMMARY"
+            echo "| VPC ID | \`$VPC_ID\` |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| CIDR Block | \`$CIDR\` |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| State | 🟢 \`$VPC_STATE\` |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Subnets | $SUBNET_COUNT |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Security Groups | $SG_COUNT |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| NAT Gateways | $NAT_COUNT |" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$ALB_NAME" != "N/A" ] && [ "$ALB_NAME" != "None" ]; then
+              echo "| ALB | \`$ALB_NAME\` (\`$ALB_STATE\`) |" >> "$GITHUB_STEP_SUMMARY"
+              echo "| ALB DNS | \`$ALB_DNS\` |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: CloudWatch & Secrets inventory
+        run: |
+          echo "## 📋 CloudWatch Log Groups" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Log Group | Retention | Stored Size |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-----------|-----------|-------------|" >> "$GITHUB_STEP_SUMMARY"
+
+          for LG in $LOG_GROUPS; do
+            LG_INFO=$(aws logs describe-log-groups --log-group-name-prefix "$LG" \
+              --query "logGroups[?logGroupName=='$LG'].[retentionInDays,storedBytes]" \
+              --output text 2>/dev/null || echo "")
+
+            if [ -z "$LG_INFO" ]; then
+              echo "| \`$LG\` | ⚪ \`NOT_FOUND\` | - |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              RETENTION=$(echo "$LG_INFO" | awk '{print $1}')
+              STORED_BYTES=$(echo "$LG_INFO" | awk '{print $2}')
+              [ "$RETENTION" = "None" ] && RETENTION="Never expire"
+              STORED="$(awk "BEGIN {printf \"%.2f\", $STORED_BYTES/1048576}" 2>/dev/null || echo "0") MB"
+              echo "| \`$LG\` | ${RETENTION} days | $STORED |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "## 🔑 Secrets Manager" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Secret | Status | Last Changed |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|--------|--------|--------------|" >> "$GITHUB_STEP_SUMMARY"
+
+          SECRET_INFO=$(aws secretsmanager describe-secret \
+            --secret-id "/fixit/production/gemini-api-key" \
+            --query "[Name,LastChangedDate]" --output text 2>/dev/null || echo "")
+
+          if [ -z "$SECRET_INFO" ]; then
+            echo "| \`/fixit/production/gemini-api-key\` | ⚪ \`NOT_FOUND\` | - |" >> "$GITHUB_STEP_SUMMARY"
+          else
+            LAST_CHANGED=$(echo "$SECRET_INFO" | awk '{print $2}')
+            echo "| \`/fixit/production/gemini-api-key\` | 🟢 Active | $LAST_CHANGED |" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+      # ── CloudWatch Metrics ─────────────────────────────
+      - name: Lambda metrics
+        run: |
+          START="${{ steps.dates.outputs.START_DATE }}T00:00:00Z"
+          END="${{ steps.dates.outputs.END_DATE }}T23:59:59Z"
+          PERIOD=2592000
+
+          echo "---" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "# 📊 CloudWatch Metrics" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "## ⚡ Lambda: \`$LAMBDA_FUNCTION\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          get_metric() {
+            local METRIC=$1 STAT=$2
+            aws cloudwatch get-metric-statistics \
+              --namespace AWS/Lambda \
+              --metric-name "$METRIC" \
+              --dimensions Name=FunctionName,Value="$LAMBDA_FUNCTION" \
+              --start-time "$START" --end-time "$END" \
+              --period $PERIOD --statistics "$STAT" \
+              --query "Datapoints[0].$STAT" \
+              --output text 2>/dev/null || echo "0"
+          }
+
+          INVOCATIONS=$(get_metric Invocations Sum)
+          ERRORS=$(get_metric Errors Sum)
+          AVG_DURATION=$(get_metric Duration Average)
+          MAX_DURATION=$(get_metric Duration Maximum)
+          THROTTLES=$(get_metric Throttles Sum)
+          CONCURRENT=$(get_metric ConcurrentExecutions Maximum)
+
+          # Normalize "None"
+          [ "$INVOCATIONS" = "None" ] && INVOCATIONS="0"
+          [ "$ERRORS" = "None" ] && ERRORS="0"
+          [ "$AVG_DURATION" = "None" ] && AVG_DURATION="0"
+          [ "$MAX_DURATION" = "None" ] && MAX_DURATION="0"
+          [ "$THROTTLES" = "None" ] && THROTTLES="0"
+          [ "$CONCURRENT" = "None" ] && CONCURRENT="0"
+
+          # Format duration
+          AVG_DUR_FMT=$(awk "BEGIN {printf \"%.2f\", $AVG_DURATION}" 2>/dev/null || echo "0")
+          MAX_DUR_FMT=$(awk "BEGIN {printf \"%.2f\", $MAX_DURATION}" 2>/dev/null || echo "0")
+
+          # Error rate
+          ERROR_RATE="0.00"
+          if [ "$INVOCATIONS" != "0" ] && [ -n "$INVOCATIONS" ]; then
+            ERROR_RATE=$(awk "BEGIN {printf \"%.2f\", ($ERRORS/$INVOCATIONS)*100}" 2>/dev/null || echo "0")
+          fi
+
+          echo "| Metric | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|--------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Total Invocations | **$INVOCATIONS** |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Total Errors | $ERRORS |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Error Rate | ${ERROR_RATE}% |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Avg Duration | ${AVG_DUR_FMT} ms |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Max Duration | ${MAX_DUR_FMT} ms |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Total Throttles | $THROTTLES |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Peak Concurrent Executions | $CONCURRENT |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          # Daily invocations breakdown
+          echo "<details>" >> "$GITHUB_STEP_SUMMARY"
+          echo "<summary>📈 Daily Invocations Breakdown</summary>" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Date | Invocations | Errors | Avg Duration (ms) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|------|-------------|--------|--------------------|" >> "$GITHUB_STEP_SUMMARY"
+
+          DAILY_INV=$(aws cloudwatch get-metric-statistics \
+            --namespace AWS/Lambda \
+            --metric-name Invocations \
+            --dimensions Name=FunctionName,Value="$LAMBDA_FUNCTION" \
+            --start-time "$START" --end-time "$END" \
+            --period 86400 --statistics Sum \
+            --output json 2>/dev/null || echo '{"Datapoints":[]}')
+
+          DAILY_ERR=$(aws cloudwatch get-metric-statistics \
+            --namespace AWS/Lambda \
+            --metric-name Errors \
+            --dimensions Name=FunctionName,Value="$LAMBDA_FUNCTION" \
+            --start-time "$START" --end-time "$END" \
+            --period 86400 --statistics Sum \
+            --output json 2>/dev/null || echo '{"Datapoints":[]}')
+
+          DAILY_DUR=$(aws cloudwatch get-metric-statistics \
+            --namespace AWS/Lambda \
+            --metric-name Duration \
+            --dimensions Name=FunctionName,Value="$LAMBDA_FUNCTION" \
+            --start-time "$START" --end-time "$END" \
+            --period 86400 --statistics Average \
+            --output json 2>/dev/null || echo '{"Datapoints":[]}')
+
+          # Merge daily data using jq
+          jq -n --argjson inv "$DAILY_INV" --argjson err "$DAILY_ERR" --argjson dur "$DAILY_DUR" '
+            ($inv.Datapoints | map({(.Timestamp[:10]): .Sum}) | add // {}) as $inv_map |
+            ($err.Datapoints | map({(.Timestamp[:10]): .Sum}) | add // {}) as $err_map |
+            ($dur.Datapoints | map({(.Timestamp[:10]): .Average}) | add // {}) as $dur_map |
+            ([$inv_map, $err_map, $dur_map] | map(keys) | add | unique | sort) as $dates |
+            $dates[] |
+            "| \(.) | \($inv_map[.] // 0 | floor) | \($err_map[.] // 0 | floor) | \($dur_map[.] // 0 | . * 100 | round / 100) |"
+          ' >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "| No data | - | - | - |" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "</details>" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: DynamoDB metrics
+        run: |
+          START="${{ steps.dates.outputs.START_DATE }}T00:00:00Z"
+          END="${{ steps.dates.outputs.END_DATE }}T23:59:59Z"
+          PERIOD=2592000
+
+          echo "## 🗄️ DynamoDB Metrics" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Table | Read Units | Write Units | Read Throttles | Write Throttles |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|------------|-------------|----------------|-----------------|" >> "$GITHUB_STEP_SUMMARY"
+
+          for TABLE in $DYNAMODB_TABLES; do
+            get_ddb_metric() {
+              local METRIC=$1
+              aws cloudwatch get-metric-statistics \
+                --namespace AWS/DynamoDB \
+                --metric-name "$METRIC" \
+                --dimensions Name=TableName,Value="$TABLE" \
+                --start-time "$START" --end-time "$END" \
+                --period $PERIOD --statistics Sum \
+                --query "Datapoints[0].Sum" \
+                --output text 2>/dev/null || echo "0"
+            }
+
+            READ=$(get_ddb_metric ConsumedReadCapacityUnits)
+            WRITE=$(get_ddb_metric ConsumedWriteCapacityUnits)
+            READ_T=$(get_ddb_metric ReadThrottleEvents)
+            WRITE_T=$(get_ddb_metric WriteThrottleEvents)
+
+            [ "$READ" = "None" ] && READ="0"
+            [ "$WRITE" = "None" ] && WRITE="0"
+            [ "$READ_T" = "None" ] && READ_T="0"
+            [ "$WRITE_T" = "None" ] && WRITE_T="0"
+
+            READ_FMT=$(awk "BEGIN {printf \"%.0f\", $READ}" 2>/dev/null || echo "0")
+            WRITE_FMT=$(awk "BEGIN {printf \"%.0f\", $WRITE}" 2>/dev/null || echo "0")
+            READ_T_FMT=$(awk "BEGIN {printf \"%.0f\", $READ_T}" 2>/dev/null || echo "0")
+            WRITE_T_FMT=$(awk "BEGIN {printf \"%.0f\", $WRITE_T}" 2>/dev/null || echo "0")
+
+            THROTTLE_WARN=""
+            [ "$READ_T_FMT" != "0" ] && THROTTLE_WARN=" ⚠️"
+            [ "$WRITE_T_FMT" != "0" ] && THROTTLE_WARN=" ⚠️"
+
+            echo "| \`$TABLE\` | $READ_FMT | $WRITE_FMT | $READ_T_FMT$THROTTLE_WARN | $WRITE_T_FMT$THROTTLE_WARN |" >> "$GITHUB_STEP_SUMMARY"
+          done
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: ECS Fargate metrics
+        run: |
+          START="${{ steps.dates.outputs.START_DATE }}T00:00:00Z"
+          END="${{ steps.dates.outputs.END_DATE }}T23:59:59Z"
+          PERIOD=2592000
+
+          echo "## 🐳 ECS Fargate Metrics: \`$ECS_SERVICE\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          get_ecs_metric() {
+            local METRIC=$1 STAT=$2
+            aws cloudwatch get-metric-statistics \
+              --namespace AWS/ECS \
+              --metric-name "$METRIC" \
+              --dimensions Name=ClusterName,Value="$ECS_CLUSTER" Name=ServiceName,Value="$ECS_SERVICE" \
+              --start-time "$START" --end-time "$END" \
+              --period $PERIOD --statistics "$STAT" \
+              --query "Datapoints[0].$STAT" \
+              --output text 2>/dev/null || echo "N/A"
+          }
+
+          AVG_CPU=$(get_ecs_metric CPUUtilization Average)
+          MAX_CPU=$(get_ecs_metric CPUUtilization Maximum)
+          AVG_MEM=$(get_ecs_metric MemoryUtilization Average)
+          MAX_MEM=$(get_ecs_metric MemoryUtilization Maximum)
+
+          [ "$AVG_CPU" = "None" ] && AVG_CPU="N/A"
+          [ "$MAX_CPU" = "None" ] && MAX_CPU="N/A"
+          [ "$AVG_MEM" = "None" ] && AVG_MEM="N/A"
+          [ "$MAX_MEM" = "None" ] && MAX_MEM="N/A"
+
+          AVG_CPU_FMT=$(awk "BEGIN {printf \"%.2f\", $AVG_CPU}" 2>/dev/null || echo "$AVG_CPU")
+          MAX_CPU_FMT=$(awk "BEGIN {printf \"%.2f\", $MAX_CPU}" 2>/dev/null || echo "$MAX_CPU")
+          AVG_MEM_FMT=$(awk "BEGIN {printf \"%.2f\", $AVG_MEM}" 2>/dev/null || echo "$AVG_MEM")
+          MAX_MEM_FMT=$(awk "BEGIN {printf \"%.2f\", $MAX_MEM}" 2>/dev/null || echo "$MAX_MEM")
+
+          echo "| Metric | Average | Maximum |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|--------|---------|---------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| CPU Utilization | ${AVG_CPU_FMT}% | ${MAX_CPU_FMT}% |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Memory Utilization | ${AVG_MEM_FMT}% | ${MAX_MEM_FMT}% |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: API Gateway metrics
+        run: |
+          START="${{ steps.dates.outputs.START_DATE }}T00:00:00Z"
+          END="${{ steps.dates.outputs.END_DATE }}T23:59:59Z"
+          PERIOD=2592000
+
+          echo "## 🌐 API Gateway Metrics" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          # Use API_ID from previous step or look it up
+          if [ -z "$API_ID" ] || [ "$API_ID" = "None" ]; then
+            API_ID=$(aws apigatewayv2 get-apis \
+              --query "Items[?Name=='fixit-backend-api'].ApiId | [0]" \
+              --output text 2>/dev/null || echo "")
+          fi
+
+          if [ -z "$API_ID" ] || [ "$API_ID" = "None" ]; then
+            echo "> API Gateway not found - skipping metrics." >> "$GITHUB_STEP_SUMMARY"
+          else
+            get_apigw_metric() {
+              local METRIC=$1 STAT=$2
+              aws cloudwatch get-metric-statistics \
+                --namespace AWS/ApiGateway \
+                --metric-name "$METRIC" \
+                --dimensions Name=ApiId,Value="$API_ID" \
+                --start-time "$START" --end-time "$END" \
+                --period $PERIOD --statistics "$STAT" \
+                --query "Datapoints[0].$STAT" \
+                --output text 2>/dev/null || echo "0"
+            }
+
+            TOTAL_REQ=$(get_apigw_metric Count Sum)
+            AVG_LATENCY=$(get_apigw_metric Latency Average)
+            MAX_LATENCY=$(get_apigw_metric Latency Maximum)
+            ERR_4XX=$(get_apigw_metric 4xx Sum)
+            ERR_5XX=$(get_apigw_metric 5xx Sum)
+
+            [ "$TOTAL_REQ" = "None" ] && TOTAL_REQ="0"
+            [ "$AVG_LATENCY" = "None" ] && AVG_LATENCY="0"
+            [ "$MAX_LATENCY" = "None" ] && MAX_LATENCY="0"
+            [ "$ERR_4XX" = "None" ] && ERR_4XX="0"
+            [ "$ERR_5XX" = "None" ] && ERR_5XX="0"
+
+            TOTAL_REQ_FMT=$(awk "BEGIN {printf \"%.0f\", $TOTAL_REQ}" 2>/dev/null || echo "0")
+            AVG_LAT_FMT=$(awk "BEGIN {printf \"%.2f\", $AVG_LATENCY}" 2>/dev/null || echo "0")
+            MAX_LAT_FMT=$(awk "BEGIN {printf \"%.2f\", $MAX_LATENCY}" 2>/dev/null || echo "0")
+            ERR_4XX_FMT=$(awk "BEGIN {printf \"%.0f\", $ERR_4XX}" 2>/dev/null || echo "0")
+            ERR_5XX_FMT=$(awk "BEGIN {printf \"%.0f\", $ERR_5XX}" 2>/dev/null || echo "0")
+
+            echo "| Metric | Value |" >> "$GITHUB_STEP_SUMMARY"
+            echo "|--------|-------|" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Total Requests | **$TOTAL_REQ_FMT** |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Avg Latency | ${AVG_LAT_FMT} ms |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Max Latency | ${MAX_LAT_FMT} ms |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| 4xx Errors | $ERR_4XX_FMT |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| 5xx Errors | $ERR_5XX_FMT |" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+      # ── Cost Explorer ──────────────────────────────────
+      - name: Cost Explorer report
+        run: |
+          START_DATE="${{ steps.dates.outputs.START_DATE }}"
+          END_DATE="${{ steps.dates.outputs.END_DATE }}"
+
+          echo "---" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "# 💰 Cost Report" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          # Try Cost Explorer - may fail if permissions not granted
+          COST_DATA=$(aws ce get-cost-and-usage \
+            --time-period Start="$START_DATE",End="$END_DATE" \
+            --granularity DAILY \
+            --metrics BlendedCost \
+            --group-by Type=DIMENSION,Key=SERVICE \
+            --output json 2>/dev/null) || COST_DATA=""
+
+          if [ -z "$COST_DATA" ]; then
+            cat >> "$GITHUB_STEP_SUMMARY" << 'COST_ERR'
+          > **Cost Explorer data unavailable.** The OIDC role may need `ce:GetCostAndUsage` permission.
+          >
+          > Add this IAM policy to enable cost reporting:
+          > ```json
+          > {
+          >   "Effect": "Allow",
+          >   "Action": ["ce:GetCostAndUsage"],
+          >   "Resource": "*"
+          > }
+          > ```
+          COST_ERR
+          else
+            # ── Total costs by service ──
+            echo "## Total Costs by Service (${START_DATE} to ${END_DATE})" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Service | Total Cost |" >> "$GITHUB_STEP_SUMMARY"
+            echo "|---------|------------|" >> "$GITHUB_STEP_SUMMARY"
+
+            echo "$COST_DATA" | jq -r '
+              [.ResultsByTime[].Groups[] | {service: .Keys[0], cost: (.Metrics.BlendedCost.Amount | tonumber)}] |
+              group_by(.service) |
+              map({service: .[0].service, total: (map(.cost) | add)}) |
+              sort_by(-.total) |
+              .[] |
+              select(.total > 0.001) |
+              "| \(.service) | $\(.total * 100 | round / 100) |"
+            ' >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "| Error parsing cost data | - |" >> "$GITHUB_STEP_SUMMARY"
+
+            # Grand total
+            GRAND_TOTAL=$(echo "$COST_DATA" | jq -r '
+              [.ResultsByTime[].Groups[].Metrics.BlendedCost.Amount | tonumber] | add | . * 100 | round / 100
+            ' 2>/dev/null || echo "N/A")
+            echo "| **GRAND TOTAL** | **\$$GRAND_TOTAL** |" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+
+            # ── Daily cost breakdown ──
+            echo "<details>" >> "$GITHUB_STEP_SUMMARY"
+            echo "<summary>📅 Daily Cost Breakdown</summary>" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Date | Total Cost | Services |" >> "$GITHUB_STEP_SUMMARY"
+            echo "|------|------------|----------|" >> "$GITHUB_STEP_SUMMARY"
+
+            echo "$COST_DATA" | jq -r '
+              .ResultsByTime[] |
+              .TimePeriod.Start as $date |
+              .Groups as $groups |
+              ($groups | map(.Metrics.BlendedCost.Amount | tonumber) | add // 0) as $total |
+              ($groups | map(select((.Metrics.BlendedCost.Amount | tonumber) > 0.001)) |
+                map("\(.Keys[0]): $\(.Metrics.BlendedCost.Amount | tonumber * 100 | round / 100)") |
+                join(", ")) as $services |
+              "| \($date) | **$\($total * 100 | round / 100)** | \($services) |"
+            ' >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "| Error | - | - |" >> "$GITHUB_STEP_SUMMARY"
+
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "</details>" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+
+            # ── Cost trend ──
+            echo "## Cost Trend" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+
+            FIRST_DAY_DATE=$(echo "$COST_DATA" | jq -r '.ResultsByTime[0].TimePeriod.Start // "N/A"' 2>/dev/null)
+            LAST_DAY_DATE=$(echo "$COST_DATA" | jq -r '.ResultsByTime[-1].TimePeriod.Start // "N/A"' 2>/dev/null)
+
+            FIRST_DAY_COST=$(echo "$COST_DATA" | jq -r '
+              .ResultsByTime[0].Groups | map(.Metrics.BlendedCost.Amount | tonumber) | add // 0 | . * 100 | round / 100
+            ' 2>/dev/null || echo "0")
+            LAST_DAY_COST=$(echo "$COST_DATA" | jq -r '
+              .ResultsByTime[-1].Groups | map(.Metrics.BlendedCost.Amount | tonumber) | add // 0 | . * 100 | round / 100
+            ' 2>/dev/null || echo "0")
+
+            # Daily average
+            NUM_DAYS=$(echo "$COST_DATA" | jq '.ResultsByTime | length' 2>/dev/null || echo "1")
+            DAILY_AVG=$(awk "BEGIN {printf \"%.2f\", $GRAND_TOTAL / $NUM_DAYS}" 2>/dev/null || echo "N/A")
+
+            # Monthly projection (30 days)
+            MONTHLY_PROJ=$(awk "BEGIN {printf \"%.2f\", $DAILY_AVG * 30}" 2>/dev/null || echo "N/A")
+
+            echo "| Metric | Value |" >> "$GITHUB_STEP_SUMMARY"
+            echo "|--------|-------|" >> "$GITHUB_STEP_SUMMARY"
+            echo "| First Day ($FIRST_DAY_DATE) | \$$FIRST_DAY_COST |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Last Day ($LAST_DAY_DATE) | \$$LAST_DAY_COST |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Period Total ($NUM_DAYS days) | **\$$GRAND_TOTAL** |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Daily Average | \$$DAILY_AVG |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Projected Monthly (30d) | **\$$MONTHLY_PROJ** |" >> "$GITHUB_STEP_SUMMARY"
+
+            # Trend direction
+            if [ "$FIRST_DAY_COST" != "0" ] && [ "$FIRST_DAY_COST" != "N/A" ]; then
+              TREND=$(awk "BEGIN {printf \"%.1f\", (($LAST_DAY_COST - $FIRST_DAY_COST) / $FIRST_DAY_COST) * 100}" 2>/dev/null || echo "0")
+              TREND_ICON="➡️"
+              TREND_NUM=$(echo "$TREND" | tr -d '-')
+              if awk "BEGIN {exit !($TREND > 5)}" 2>/dev/null; then
+                TREND_ICON="📈"
+              elif awk "BEGIN {exit !($TREND < -5)}" 2>/dev/null; then
+                TREND_ICON="📉"
+              fi
+              echo "| Trend | ${TREND_ICON} ${TREND}% |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+      # ── Report Footer ──────────────────────────────────
+      - name: Report footer
+        run: |
+          echo "---" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "*Report generated at $(date -u '+%Y-%m-%d %H:%M:%S UTC') by [GitHub Actions run #${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})*" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "> **Notes:**" >> "$GITHUB_STEP_SUMMARY"
+          echo "> - DynamoDB item counts and table sizes are approximate (updated by AWS every ~6 hours)" >> "$GITHUB_STEP_SUMMARY"
+          echo "> - CloudWatch metric values of \`None\` indicate no data points for the selected period" >> "$GITHUB_STEP_SUMMARY"
+          echo "> - Cost Explorer data requires \`ce:GetCostAndUsage\` IAM permission and may have a 24-hour delay" >> "$GITHUB_STEP_SUMMARY"
+          echo "> - Cost Explorer \`End\` date is exclusive in the AWS API" >> "$GITHUB_STEP_SUMMARY"
